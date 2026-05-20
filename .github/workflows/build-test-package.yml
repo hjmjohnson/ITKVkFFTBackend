@@ -3,11 +3,11 @@ name: Build, test, package
 on: [push,pull_request]
 
 env:
-  itk-git-tag: "v5.3.0"
-  itk-wheel-tag: "v5.3.0"
+  itk-git-tag: "v5.4.6"
+  itk-wheel-tag: "v5.4.6"
   itk-python-package-tag: "03391ad738438661fff40bfe37a7cfabd171b9b1"
-  opencl-icd-loader-git-tag: "v2021.04.29"
-  opencl-headers-git-tag: "v2021.04.29"
+  opencl-icd-loader-git-tag: "v2025.07.22"
+  opencl-headers-git-tag: "v2025.07.22"
   vkfft-backend: 3
   opencl-version: "120"
 
@@ -18,7 +18,7 @@ jobs:
     strategy:
       max-parallel: 3
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-14]
+        os: [ubuntu-24.04, windows-2022, macos-15]
         include:
           - os: ubuntu-24.04
             c-compiler: "gcc"
@@ -28,7 +28,7 @@ jobs:
             c-compiler: "cl.exe"
             cxx-compiler: "cl.exe"
             cmake-build-type: "Release"
-          - os: macos-14
+          - os: macos-15
             c-compiler: "clang"
             cxx-compiler: "clang++"
             cmake-build-type: "MinSizeRel"
@@ -47,10 +47,10 @@ jobs:
         python -m pip install ninja
 
     - name: Get specific version of CMake, Ninja
-      uses: lukka/get-cmake@v3.22.2
+      uses: lukka/get-cmake@latest
 
     - name: Download OpenCL-SDK
-      if: matrix.os == 'macos-14'
+      if: matrix.os == 'macos-15'
       run: |
         cd ..
         git clone --recursive https://github.com/KhronosGroup/OpenCL-SDK.git
@@ -73,12 +73,19 @@ jobs:
         popd
       shell: bash
 
-    - name: Install pocl
-      if: matrix.os != 'windows-2022'
+    - name: Install pocl (Linux)
+      if: matrix.os == 'ubuntu-24.04'
       run: |
-        sudo conda config --add channels conda-forge
-        sudo conda config --set channel_priority strict
-        sudo conda install -c conda-forge pocl
+        sudo apt-get update
+        sudo apt-get install -y pocl-opencl-icd ocl-icd-opencl-dev clinfo
+        clinfo
+      shell: bash
+
+    - name: Install pocl (macOS)
+      if: matrix.os == 'macos-15'
+      run: |
+        brew update
+        brew install pocl
       shell: bash
 
     - name: Download ITK
@@ -89,7 +96,7 @@ jobs:
         git checkout ${{ env.itk-git-tag }}
 
     - name: Build OpenCL-SDK
-      if: matrix.os == 'macos-14'
+      if: matrix.os == 'macos-15'
       run: |
         cd ..
         mkdir OpenCL-SDK-build
@@ -213,7 +220,7 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        python-version-minor: ["9", "10", "11"]
+        python-version-minor: ["10", "11"]
         include:
           - c-compiler: "cl.exe"
             cxx-compiler: "cl.exe"
@@ -221,7 +228,7 @@ jobs:
 
     steps:
     - name: Get specific version of CMake, Ninja
-      uses: lukka/get-cmake@v3.22.2
+      uses: lukka/get-cmake@latest
 
     - uses: actions/checkout@v5
       with:
@@ -300,7 +307,7 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        python-version: ["37", "38", "39", "310", "311"]
+        python-version: ["310", "311"]
 
     steps:
     - uses: actions/checkout@v5
@@ -336,7 +343,7 @@ jobs:
         path: dist
 
   build-macos-opencl-python-packages:
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       max-parallel: 2
 
@@ -349,7 +356,7 @@ jobs:
         sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
 
     - name: Get specific version of CMake, Ninja
-      uses: lukka/get-cmake@v3.22.2
+      uses: lukka/get-cmake@latest
 
     - name: 'Fetch build script'
       run: |
@@ -378,7 +385,7 @@ jobs:
 
     steps:
     - name: Download Python Packages
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v4
 
     - name: Prepare packages for upload
       run: |
