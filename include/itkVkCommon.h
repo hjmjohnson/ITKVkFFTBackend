@@ -197,6 +197,35 @@ private:
   // Cached GPU context + plan configuration are (re)built only on first use or when
   // the device/transform shape changes; m_VkGPU and m_VkParameters hold that cached state.
   bool m_MustConfigure{ true };
+
+  // Cached compiled plan and persistent per-shape GPU buffers. initializeVkFFT (which
+  // JIT-compiles the FFT kernels) and the buffer allocations run once per shape and are
+  // reused across same-shape transforms; per call only the host<->device copies and the
+  // VkFFTAppend run. Released together with the context in ReleaseBackend().
+  //
+  // The VkFFTApplication is heap-allocated (not an inline member) so that its size is
+  // computed in the library translation unit that actually populates it; embedding it
+  // by value makes the class layout depend on sizeof(VkFFTApplication) at every include
+  // site, which can differ and corrupt the members that follow.
+  VkFFTApplication * m_VkFFTApplication{ nullptr };
+  bool               m_PlanConfigured{ false };
+#if (VKFFT_BACKEND == CUDA)
+  cuFloatComplex * m_GPUBuffer{ nullptr };
+  cuFloatComplex * m_InputGPUBuffer{ nullptr };
+  cuFloatComplex * m_OutputGPUBuffer{ nullptr };
+#elif (VKFFT_BACKEND == OPENCL)
+  cl_mem m_GPUBuffer{ nullptr };
+  cl_mem m_InputGPUBuffer{ nullptr };
+  cl_mem m_OutputGPUBuffer{ nullptr };
+#elif (VKFFT_BACKEND == LEVEL_ZERO)
+  void * m_GPUBuffer{ nullptr };
+  void * m_InputGPUBuffer{ nullptr };
+  void * m_OutputGPUBuffer{ nullptr };
+#elif (VKFFT_BACKEND == METAL)
+  MTL::Buffer * m_GPUBuffer{ nullptr };
+  MTL::Buffer * m_InputGPUBuffer{ nullptr };
+  MTL::Buffer * m_OutputGPUBuffer{ nullptr };
+#endif
 };
 
 } // namespace itk
