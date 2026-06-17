@@ -40,21 +40,36 @@ VkCommon::Run(const VkGPU & vkGPU, const VkParameters & vkParameters)
 {
   VkFFTResult resFFT{ VKFFT_SUCCESS };
 
-  m_VkGPU = vkGPU;
-  m_VkParameters = vkParameters;
-  if (m_MustConfigure || m_VkGPU != m_VkGPUPrevious || m_VkParameters != m_VkParametersPrevious)
+  // Create the GPU context once and reuse it across calls. Reconfigure only when the
+  // requested device or the transform shape changes -- never merely because the CPU
+  // buffer pointers differ (they change on every call). The cached context is released
+  // in the destructor, so transforms no longer create (and leak) a context per call.
+  const bool deviceChanged{ vkGPU.device_id != m_VkGPU.device_id };
+  const bool shapeChanged{ !vkParameters.SameShapeAs(m_VkParameters) };
+  if (m_MustConfigure || deviceChanged || shapeChanged)
   {
     resFFT = this->ReleaseBackend();
     if (resFFT != VKFFT_SUCCESS)
     {
       return resFFT;
     }
+    m_VkGPU.device_id = vkGPU.device_id;
+    m_VkParameters = vkParameters;
     resFFT = this->ConfigureBackend();
     if (resFFT != VKFFT_SUCCESS)
     {
       return resFFT;
     }
     this->m_MustConfigure = false;
+  }
+  else
+  {
+    // Cached context and plan configuration are still valid; only the per-call CPU
+    // buffer pointers and byte counts differ.
+    m_VkParameters.inputCPUBuffer = vkParameters.inputCPUBuffer;
+    m_VkParameters.inputBufferBytes = vkParameters.inputBufferBytes;
+    m_VkParameters.outputCPUBuffer = vkParameters.outputCPUBuffer;
+    m_VkParameters.outputBufferBytes = vkParameters.outputBufferBytes;
   }
 
   resFFT = this->PerformFFT();
@@ -888,6 +903,7 @@ VkCommon::ReleaseBackend()
   if (m_VkGPU.context)
   {
     cuCtxDestroy(m_VkGPU.context);
+    m_VkGPU.context = 0;
   }
 #elif (VKFFT_BACKEND == OPENCL)
   cl_int resCL{ CL_SUCCESS };
@@ -900,6 +916,7 @@ VkCommon::ReleaseBackend()
       std::cerr << __FILE__ "(" << __LINE__ << "): clReleaseCommandQueue returned " << resCL << std::endl;
       return VkFFTResult{ VKFFT_ERROR_FAILED_TO_RELEASE_COMMAND_QUEUE };
     }
+    m_VkGPU.commandQueue = 0;
   }
 
   if (m_VkGPU.context)
@@ -910,6 +927,7 @@ VkCommon::ReleaseBackend()
       std::cerr << __FILE__ "(" << __LINE__ << "): clReleaseContext returned " << resCL << std::endl;
       return VkFFTResult{ VKFFT_ERROR_FAILED_TO_RELEASE_COMMAND_QUEUE };
     }
+    m_VkGPU.context = 0;
   }
 #elif (VKFFT_BACKEND == LEVEL_ZERO)
   if (m_VkGPU.commandQueue)

@@ -109,6 +109,19 @@ public:
              this->inputBufferBytes != rhs.inputBufferBytes || this->outputCPUBuffer != rhs.outputCPUBuffer ||
              this->outputBufferBytes != rhs.outputBufferBytes;
     }
+
+    /** Compare only the transform-shape fields, ignoring the per-call CPU buffer
+     * pointers and byte counts, which change on every call. The VkFFT plan depends
+     * only on the shape, so a cached plan is reusable across calls that differ
+     * only in their buffers. */
+    bool
+    SameShapeAs(const VkParameters & rhs) const
+    {
+      return this->X == rhs.X && this->Y == rhs.Y && this->Z == rhs.Z && this->P == rhs.P && this->B == rhs.B &&
+             this->N == rhs.N && this->fft == rhs.fft && this->PSize == rhs.PSize && this->I == rhs.I &&
+             this->normalized == rhs.normalized && this->omitDimension[0] == rhs.omitDimension[0] &&
+             this->omitDimension[1] == rhs.omitDimension[1] && this->omitDimension[2] == rhs.omitDimension[2];
+    }
   };
 
   struct VkGPU
@@ -181,10 +194,9 @@ private:
   VkParameters       m_VkParameters{};
   VkFFTConfiguration m_VkFFTConfiguration{};
 
-  // Re-create GPU kernel if these members indicate to
-  bool         m_MustConfigure{ true };
-  VkGPU        m_VkGPUPrevious{};
-  VkParameters m_VkParametersPrevious{};
+  // Cached GPU context + plan configuration are (re)built only on first use or when
+  // the device/transform shape changes; m_VkGPU and m_VkParameters hold that cached state.
+  bool m_MustConfigure{ true };
 };
 
 } // namespace itk
