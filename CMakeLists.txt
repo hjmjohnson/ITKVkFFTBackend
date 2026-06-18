@@ -249,6 +249,10 @@ else()
   itk_module_impl()
 endif()
 
+# VkCommon's ABI layout is selected by VKFFT_BACKEND, so consumers must compile
+# itkVkCommon.h with the same value the library was built with; export it.
+target_compile_definitions(VkFFTBackend PUBLIC VKFFT_BACKEND=${VKFFT_BACKEND})
+
 if(VKFFT_BACKEND EQUAL 4)
   target_link_libraries(VkFFTBackend PUBLIC ${LevelZero_LIBRARY})
   target_include_directories(
